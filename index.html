@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Web de pago Web3</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style2.css">
+    <!-- Importar la API de Polkadot.js usando ES Modules -->
+    <script type="module">
+        import { ApiPromise, WsProvider } from "https://cdn.jsdelivr.net/npm/@polkadot/api/+esm  ";
+        import { ContractPromise, Abi } from "https://cdn.jsdelivr.net/npm/@polkadot/api-contract/+esm  ";
+        import { encodeAddress, decodeAddress } from 'https://cdn.jsdelivr.net/npm/@polkadot/util-crypto@12.2.1/+esm  ';
+        window.ApiPromise = ApiPromise;
+        window.WsProvider = WsProvider;
+        window.ContractPromise = ContractPromise;
+        window.Abi = Abi;
+        window.encodeAddress = encodeAddress;
+        window.decodeAddress = decodeAddress;
+    </script>
+    <!-- Cargar SDK de SubWallet -->
+     <script src="https://cdn.jsdelivr.net/npm/@subwallet-connect/core@0.4.0/dist/index.min.js  "></script>
+</head>
+<body>
+    <div class="container">
+        <button id="theme-toggle" title="Cambiar Modo">🌙</button>
+        <h1>Web de pagos Web3</h1>
+        <button id="connect-btn" class="connect-button">Conectar Polkadot.js</button>
+        <button id="connect-subwallet-btn" class="connect-button">Conectar SubWallet</button>
+        <button id="disconnect-btn"  class="connect-button" style="display: none;" >Desconectar Wallet</button>
+        <div id="accounts-container">
+            <p>Selecciona tu cuenta:</p>
+            <select id="accounts"></select>
+        </div>
+
+        <h2>Balances:</h2>
+        <p id="balance-dot">DOT: -</p>
+        <p id="balance-usdt">USDT: -</p>
+        <p id="balance-BRLd">BRLd: -</p>
+
+        <!-- Bloque colapsable para Pagar con DOT -->
+        <div class="payment-section">
+            <div class="payment-section-header">
+                <h2>Pagar con DOT</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="payment-section-content">
+                <p>Pago rápido</p>
+                <button id="pay-2-btn" class="payment-button">Pagar 2 DOT</button>
+                <button id="pay-1-btn" class="payment-button">Pagar 1 DOT</button>
+                <button id="pay-0.5-btn" class="payment-button">Pagar 0.5 DOT</button>
+                <p>o</p>
+                <input type="number" id="custom-amount" placeholder="Ingresa monto" step="0.0001" min="0" />
+                <button id="pay-custom-btn" class="payment-button">Pagar Monto Personalizado</button>
+            </div>
+        </div>
+
+        <!-- Bloque colapsable para Pagar con USDT -->
+        <div class="payment-section">
+            <div class="payment-section-header">
+                <h2>Pagar con USDT</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="payment-section-content">
+                <p>Pago rápido</p>
+                <button id="pay-20-usdt-btn" class="payment-button">Pagar 20 USDT</button>
+                <button id="pay-10-usdt-btn" class="payment-button">Pagar 10 USDT</button>
+                <button id="pay-5-usdt-btn" class="payment-button">Pagar 1 USDT</button>
+                <p>o</p>
+                <input type="number" id="custom-amount-usdt" placeholder="Ingresa monto en USDT" step="0.01" min="0" />
+                <button id="pay-custom-usdt-btn" class="payment-button">Pagar Monto Personalizado</button>                
+            </div>
+        </div>
+
+        <!-- Bloque colapsable para Pagar con BRLd -->
+        <div class="payment-section">
+            <div class="payment-section-header">
+                <h2>Pagar con BRLd</h2>
+                <span class="toggle-icon">▼</span>
+            </div>
+            <div class="payment-section-content">
+                <p>Pago rápido en BRLd</p>
+                <button id="pay-20-BRLd-btn" class="payment-button">Pagar 20 BRLd</button>
+                <button id="pay-10-BRLd-btn" class="payment-button">Pagar 10 BRLd</button>
+                <button id="pay-5-BRLd-btn" class="payment-button">Pagar 5 BRLd</button>
+                <p>o</p>
+                <input type="number" id="custom-amount-BRLd" placeholder="Ingresa monto en BRLd" step="0.01" min="0" />
+                <button id="pay-custom-BRLd-btn" class="payment-button">Pagar Monto Personalizado</button>                
+            </div>
+        </div>
+
+        <p id="pay-result"></p>
+        <p id="pay-status" style="display: none;"></p>
+
+        <h2>Información del nodo</h2>
+        <p id="node-info">N/A</p>
+        <p id="block-number">Bloque actual: N/A</p>
+    </div>
+    <script type="module" src="script2.js"></script>
+    <script src="theme.js"></script>
+</body>
+</html>

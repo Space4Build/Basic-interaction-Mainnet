@@ -1,0 +1,433 @@
+/* Variables para colores consistentes */
+:root {
+    --primary-color: #6a11cb;
+    --secondary-color: #2575fc;
+    --success-color: #4CAF50;
+    --warning-color: #FF9800;
+    --error-color: #f44336;
+    --dark-color: #333;
+    --light-color: #f8f9fa;
+    --border-color: #dee2e6;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --border-radius: 8px;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    text-align: center;
+    padding: 20px;
+    background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
+    color: var(--dark-color);
+    line-height: 1.6;
+    margin: 0;
+    min-height: 100vh;
+}
+
+.container {
+    max-width: 800px;
+    margin: 0 auto;
+    background: white;
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow);
+    padding: 30px;
+}
+
+h1 {
+    color: var(--primary-color);
+    margin-bottom: 30px;
+    font-size: 2.2rem;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+h2 {
+    color: var(--secondary-color);
+    margin: 25px 0 15px;
+    font-size: 1.5rem;
+    border-bottom: 2px solid var(--border-color);
+    padding-bottom: 8px;
+    display: inline-block;
+}
+
+/* Estilos para botones */
+button {
+    margin: 8px;
+    padding: 12px 20px;
+    font-size: 16px;
+    border: none;
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow);
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 8px rgba(0, 0, 0, 0.15);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.connect-button {
+    margin: 10px;
+    padding: 14px 24px;
+    font-size: 17px;
+}
+
+#connect-btn {
+    background: linear-gradient(to right, #4CAF50, #8BC34A);
+    color: white;
+}
+
+#connect-subwallet-btn {
+    background: linear-gradient(to right, #2196F3, #21CBF3);
+    color: white;
+}
+
+#disconnect-btn {
+    background: linear-gradient(to right, #f44336, #ff9800);
+    color: white;
+}
+
+.payment-button {
+    background: linear-gradient(to right, #6a11cb, #2575fc);
+    color: white;
+    margin: 10px 5px;
+    padding: 12px 18px;
+    font-size: 15px;
+    min-width: 140px;
+}
+
+.payment-button:hover {
+    background: linear-gradient(to right, #2575fc, #6a11cb);
+    color: white;
+}
+
+/* Estilos para selects e inputs */
+select,
+input[type="number"] {
+    margin: 12px;
+    padding: 12px 15px;
+    font-size: 16px;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius);
+    background: white;
+    transition: border-color 0.3s;
+    width: 80%;
+    max-width: 400px;
+}
+
+select:focus,
+input[type="number"]:focus {
+    border-color: var(--secondary-color);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(37, 117, 252, 0.2);
+}
+
+/* Estilos para párrafos de información */
+#balance-dot,
+#balance-usdt,
+#balance-BRLd,
+#node-info,
+#block-number,
+#pay-result,
+#pay-status {
+    font-size: 18px;
+    margin: 15px 0;
+    padding: 15px;
+    border-radius: var(--border-radius);
+    background: #f8f9fa;
+    border-left: 4px solid var(--secondary-color);
+}
+
+#balance-dot,
+#balance-usdt,
+#balance-BRLd {
+    font-weight: bold;
+    font-size: 22px;
+    color: var(--primary-color);
+    background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+}
+
+#pay-result {
+    min-height: 2.5em;
+    word-wrap: break-word;
+    background: #e8f5e9;
+    border-left-color: var(--success-color);
+}
+
+#pay-status {
+    font-weight: bold;
+    background: #fff3e0;
+    border-left-color: var(--warning-color);
+}
+
+/* Estados específicos para pay-status */
+#pay-status.processing {
+    color: var(--warning-color);
+}
+
+#pay-status.confirmed {
+    color: var(--success-color);
+    background: #e8f5e9;
+}
+
+#pay-status.error {
+    color: var(--error-color);
+    background: #ffebee;
+    border-left-color: var(--error-color);
+}
+
+/* Información del nodo */
+#node-info,
+#block-number {
+    font-family: 'Courier New', monospace;
+    background: #e3f2fd;
+    font-size: 16px;
+}
+
+/* Separador "o" */
+p:not([id]) {
+    margin: 20px 0;
+    font-weight: bold;
+    color: var(--dark-color);
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .container {
+        padding: 15px;
+        margin: 10px;
+    }
+    
+    h1 {
+        font-size: 1.8rem;
+    }
+    
+    h2 {
+        font-size: 1.3rem;
+    }
+    
+    button {
+        padding: 10px 16px;
+        font-size: 15px;
+        margin: 6px;
+    }
+    
+    .connect-button {
+        padding: 12px 20px;
+        font-size: 16px;
+        display: block;
+        width: 90%;
+        margin: 10px auto;
+    }
+    
+    select,
+    input[type="number"] {
+        width: 90%;
+    }
+    
+    .payment-button {
+        width: 90%;
+        margin: 8px auto;
+        display: block;
+    }
+}
+
+/* Ajuste para PC - Alinear correctamente el selector de cuentas */
+@media (min-width: 769px) {
+    #accounts-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+    
+    #accounts-container p {
+        width: 100%;
+        text-align: center;
+        margin-bottom: 10px;
+    }
+    
+    #accounts {
+        width: 80%;
+        max-width: 400px;
+    }
+}
+
+/* Asegurar que el balance esté en su propia línea */
+#balance-dot,
+#balance-usdt,
+#balance-BRLd {
+    margin-top: 20px;
+}
+
+/* --- Modo Oscuro --- */
+
+/* Variables para el modo oscuro */
+[data-theme="dark"] {
+    --primary-color: #bb86fc;
+    --secondary-color: #03dac6;
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --error-color: #cf6679;
+    --dark-color: #e0e0e0; /* Texto claro en modo oscuro */
+    --light-color: #121212; /* Fondo oscuro */
+    --border-color: #444444;
+    --shadow: 0 4px 6px rgba(0, 0, 0, 0.5);
+    --bg-gradient-start: #1a1a2e;
+    --bg-gradient-end: #16213e;
+    --card-bg: #1e1e1e;
+    --input-bg: #2c2c2c;
+    --info-bg: #2a2a3a;
+    --info-border: #4a4a6a;
+    --success-bg: #1a3d1a;
+    --warning-bg: #3d2a1a;
+    --error-bg: #3d1a1a;
+}
+
+/* Estilos base para el modo oscuro */
+[data-theme="dark"] body {
+    background: linear-gradient(135deg, var(--bg-gradient-start) 0%, var(--bg-gradient-end) 100%);
+    color: var(--dark-color);
+}
+
+[data-theme="dark"] .container {
+    background: var(--card-bg);
+    color: var(--dark-color);
+}
+
+[data-theme="dark"] h1 {
+    color: var(--primary-color);
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] h2 {
+    color: var(--secondary-color);
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* Botones en modo oscuro */
+[data-theme="dark"] button {
+    color: var(--dark-color); /* Asegurar texto visible */
+    border: 1px solid var(--border-color); /* Agregar borde sutil */
+}
+
+[data-theme="dark"] #connect-btn {
+    background: linear-gradient(to right, #388e3c, #689f38);
+}
+
+[data-theme="dark"] #connect-subwallet-btn {
+    background: linear-gradient(to right, #1976d2, #0288d1);
+}
+
+[data-theme="dark"] #disconnect-btn {
+    background: linear-gradient(to right, #d32f2f, #f57c00);
+}
+
+[data-theme="dark"] .payment-button {
+    background: linear-gradient(to right, #5e35b1, #1e88e5);
+}
+
+[data-theme="dark"] .payment-button:hover {
+    background: linear-gradient(to right, #1e88e5, #5e35b1);
+}
+
+/* Inputs y selects en modo oscuro */
+[data-theme="dark"] select,
+[data-theme="dark"] input {
+    background: var(--input-bg);
+    border: 2px solid var(--border-color);
+    color: var(--dark-color);
+}
+
+[data-theme="dark"] select:focus,
+[data-theme="dark"] input:focus {
+    border-color: var(--secondary-color);
+    box-shadow: 0 0 0 3px rgba(3, 218, 198, 0.2);
+}
+
+/* Áreas de información en modo oscuro */
+[data-theme="dark"] #balance-dot,
+[data-theme="dark"] #balance-usdt,
+[data-theme="dark"] #balance-BRLd,
+[data-theme="dark"] #node-info,
+[data-theme="dark"] #block-number,
+[data-theme="dark"] #pay-result,
+[data-theme="dark"] #pay-status {
+    background: var(--info-bg);
+    border-left: 4px solid var(--info-border);
+    color: var(--dark-color);
+}
+
+[data-theme="dark"] #balance-dot,
+[data-theme="dark"] #balance-usdt,
+[data-theme="dark"] #balance-BRLd {
+    background: linear-gradient(135deg, #1a237e 0%, #283593 100%);
+    color: var(--primary-color);
+}
+
+[data-theme="dark"] #pay-result {
+    background: var(--success-bg);
+    border-left-color: var(--success-color);
+}
+
+[data-theme="dark"] #pay-status {
+    background: var(--warning-bg);
+    border-left-color: var(--warning-color);
+}
+
+[data-theme="dark"] #pay-status.confirmed {
+    background: var(--success-bg);
+    color: var(--success-color);
+}
+
+[data-theme="dark"] #pay-status.error {
+    background: var(--error-bg);
+    color: var(--error-color);
+    border-left-color: var(--error-color);
+}
+
+[data-theme="dark"] #node-info,
+[data-theme="dark"] #block-number {
+    background: var(--info-bg);
+    color: var(--secondary-color);
+}
+
+/* Botón de modo oscuro */
+#theme-toggle {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background: var(--secondary-color);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    font-size: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow);
+    transition: all 0.3s ease;
+}
+
+#theme-toggle:hover {
+    transform: scale(1.1);
+    background: var(--primary-color);
+}
+
+/* Ajuste para contenedor relativo */
+.container {
+    position: relative; /* Para que el botón absoluto se posicione dentro */
+}
+
+/* --- Fin Modo Oscuro --- */

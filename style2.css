@@ -1,0 +1,87 @@
+/* --- Estilos para Secciones de Pago Colapsables --- */
+
+.payment-section {
+    background-color: #f8f9fa; /* Fondo suave */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    margin-bottom: 20px;
+    overflow: hidden; /* Evita que el contenido desbordado se vea cuando está contraído */
+    transition: all 0.3s ease; /* Transición suave para cambios */
+}
+
+.payment-section-header {
+    padding: 15px 20px;
+    background: linear-gradient(to right, #e9ecef, #dee2e6); /* Fondo sutil para el encabezado */
+    cursor: pointer; /* Indica que es clickable */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    user-select: none; /* Evita selección de texto al hacer clic rápido */
+}
+
+.payment-section-header h2 {
+    margin: 0; /* Eliminar márgenes por defecto del h2 */
+    font-size: 1.4rem;
+    color: var(--dark-color);
+    border-bottom: none; /* Eliminar el borde inferior del h2 original */
+    display: inline-block; /* Para que no ocupe todo el ancho */
+    padding: 0;
+}
+
+.toggle-icon {
+    font-size: 1.2rem;
+    transition: transform 0.3s ease; /* Animación para la rotación del ícono */
+    color: var(--secondary-color);
+}
+
+/* Estado expandido */
+.payment-section.expanded .toggle-icon {
+    transform: rotate(180deg); /* Rotar el ícono cuando está expandido */
+}
+
+.payment-section-content {
+    padding: 0 20px; /* Inicialmente sin padding vertical para la animación */
+    max-height: 0; /* Altura máxima inicial 0 para ocultar */
+    overflow: hidden; /* Ocultar contenido que desborde */
+    transition: max-height 0.3s ease, padding 0.3s ease; /* Transiciones suaves */
+}
+
+/* Estado expandido del contenido */
+.payment-section.expanded .payment-section-content {
+    padding: 15px 20px; /* Padding cuando está expandido */
+    max-height: 1000px; /* Altura máxima grande cuando está expandido */
+    /* Nota: 1000px es un valor arbitrariamente alto. Para contenido de altura variable, 
+       se pueden usar técnicas más avanzadas con JavaScript para calcular la altura real. 
+       Para este caso, debería ser suficiente. */
+}
+
+/* Ajustes menores para elementos dentro del contenido */
+.payment-section-content p:not([id]) {
+    margin: 10px 0; /* Menos margen para los <p> simples dentro de la sección */
+}
+
+.payment-section-content .payment-button {
+    margin: 8px 5px; /* Ajustar márgenes de botones */
+}
+
+.payment-section-content input[type="number"] {
+    margin: 10px; /* Ajustar margen del input */
+    width: calc(100% - 20px); /* Ajustar ancho del input */
+    max-width: none; /* Eliminar el max-width anterior */
+}
+
+/* Estilos para modo oscuro */
+[data-theme="dark"] .payment-section {
+    background-color: var(--info-bg);
+    border: 1px solid var(--info-border);
+}
+
+[data-theme="dark"] .payment-section-header {
+    background: linear-gradient(to right, #2a2a3a, #1e1e1e);
+}
+
+[data-theme="dark"] .payment-section-header h2 {
+    color: var(--dark-color);
+}
+
+/* --- Fin Estilos para Secciones de Pago Colapsables --- */
