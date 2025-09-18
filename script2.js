@@ -216,7 +216,7 @@
                 console.error("❌ La API de Polkadot.js no se ha cargado correctamente.");
                 return;
             }
-            const NODE_URL = "wss://polkadot-assethub-rpc.blockops.network/w";
+            const NODE_URL = "wwss://polkadot-asset-hub-rpc.polkadot.io";
             const { ApiPromise, WsProvider } = window;
             const provider = new WsProvider(NODE_URL);
             api = await ApiPromise.create({ provider });
@@ -943,4 +943,5 @@
         });
     });
     // --- Fin Funcionalidad para Secciones de Pago Colapsables ---
+
 });
