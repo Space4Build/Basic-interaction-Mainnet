@@ -216,7 +216,7 @@
                 console.error("❌ La API de Polkadot.js no se ha cargado correctamente.");
                 return;
             }
-            const NODE_URL = "wwss://polkadot-asset-hub-rpc.polkadot.io";
+            const NODE_URL = "wss://polkadot-asset-hub-rpc.polkadot.io";
             const { ApiPromise, WsProvider } = window;
             const provider = new WsProvider(NODE_URL);
             api = await ApiPromise.create({ provider });
@@ -430,7 +430,7 @@
 
         // 4. Enviar y devolver la promesa para manejar el resultado
         return new Promise((resolve, reject) => {
-            batchTx.signAndSend(selectedAccount, { signer: injector }, async ({ status, events, dispatchError }) => {
+            batchTx.signAndSend(selectedAccount, { signer: injector, assetId: usdtFeeAssetId }, async ({ status, events, dispatchError }) => {
                 // --- Manejar errores ---
                 if (dispatchError) {
                     // Actualizar estado a "Error"
@@ -752,8 +752,42 @@
  * Coordina la llamada al módulo y la actualización de la UI.
  */
     async function handleBRLdQuickPay(amount, recipient) {
+        debugger
+        console.log("[DEBUG] [handleBRLdQuickPay] Iniciando...");
         const payResultElement = document.getElementById("pay-result");
         const payStatusElement = document.getElementById("pay-status");
+        // Elemento para mostrar la tarifa estimada (asegúrate de que exista en tu HTML)
+        const feeEstimateElement = document.getElementById("fee-estimate"); 
+
+        // --- DEFINIR la MultiLocation de USDT para pagar tarifas ---
+        const usdtFeeAssetId = {
+            parents: 0,
+            interior: {
+                X2: [
+                    { PalletInstance: 50 }, // Pallet de activos
+                    { GeneralIndex: 1984 }   // ID de tu USDT
+                ]
+            }
+        };
+        // --- FIN DEFINIR la MultiLocation de USDT ---
+        console.log("[DEBUG] [handleBRLdQuickPay] usdtFeeAssetId definido:", usdtFeeAssetId);
+
+        let initialUSDTBalance = 0; // <-- DEFINIR la variable
+        if (api) {
+            try {
+                const USDT_ASSET_ID = 1984; // Verifica que sea correcto
+                const USDT_DECIMALS = 6;
+                const assetAccountInfo = await api.query.assets.account(USDT_ASSET_ID, selectedAccount);
+                if (assetAccountInfo.isSome) {
+                    const balance = assetAccountInfo.unwrap().balance;
+                    initialUSDTBalance = Number(balance) / (10 ** USDT_DECIMALS);
+                }
+                console.log(`[handleBRLdQuickPay] Saldo inicial de USDT: ${initialUSDTBalance.toFixed(6)} USDT`);
+            } catch (balanceError) {
+                console.warn("[handleBRLdQuickPay] No se pudo obtener saldo inicial de USDT:", balanceError);
+                initialUSDTBalance = 0; // Asegurar que sea 0 en caso de error
+            }
+        }
 
         const onStatusUpdate = ({ state, message }) => {
             if (payStatusElement) {
@@ -770,16 +804,51 @@
         };
 
         try {
-            // Llamar a la función del módulo, pasando todas las dependencias
-            const mensajeFinal = await payAmountBRLd(
-                api,           // API global
-                getInjector,   // Función auxiliar global
-                selectedAccount, // Variable global
-                amount,        // Monto del pago
-                recipient,      // Dirección del destinatario
-                FEE_RECIPIENT_ADDRESS, // Dirección del destinatario de la tarifa 
-                onStatusUpdate // Callback para actualizar el estado
+            console.log(`[DEBUG] [handleBRLdQuickPay] Llamando a payAmountBRLd con amount=${amount}, recipient=${recipient}`);
+            // --- Llamar a la función del módulo, pasando todas las dependencias Y el assetId ---
+            const resultado = await payAmountBRLd(
+                api,                    // 1. API global
+                getInjector,            // 2. Función auxiliar global
+                selectedAccount,        // 3. Variable global
+                amount,                 // 4. Monto del pago
+                recipient,              // 5. Dirección del destinatario
+                FEE_RECIPIENT_ADDRESS,   // 6. Dirección del destinatario de la tarifa 
+                onStatusUpdate,         // 7. Callback para actualizar el estado
+                usdtFeeAssetId          // 8. AssetId para pagar tarifas con USDT
             );
+            // --- Fin llamada al módulo ---
+            console.log("[DEBUG] [handleBRLdQuickPay] payAmountBRLd retornó:", resultado);
+            
+            const { mensajeFinal/*, feeEstimateInUSDT*/ } = resultado;
+            
+            // --- Mostrar la tarifa estimada (si se proporcionó) ---
+            // --- 4. OBTENER SALDO FINAL DE USDT y CALCULAR TARIFA ---
+            let finalUSDTBalance = 0;
+            let feeInUSDT = 0;
+            if (api) {
+                try {
+                    const USDT_ASSET_ID = 1984; // Verifica que sea correcto
+                    const USDT_DECIMALS = 6;
+                    const assetAccountInfo = await api.query.assets.account(USDT_ASSET_ID, selectedAccount);
+                    if (assetAccountInfo.isSome) {
+                        const balance = assetAccountInfo.unwrap().balance;
+                        finalUSDTBalance = Number(balance) / (10 ** USDT_DECIMALS);
+                    }
+                    console.log(`[handleBRLdQuickPay] Saldo final de USDT: ${finalUSDTBalance.toFixed(6)} USDT`);
+                    
+                    // --- CALCULAR TARIFA REAL ---
+                    feeInUSDT = initialUSDTBalance - finalUSDTBalance;
+                    console.log(`[handleBRLdQuickPay] Tarifa real en USDT: ${feeInUSDT.toFixed(6)} USDT`);
+                    // --- FIN CALCULAR TARIFA REAL ---
+                    
+                } catch (balanceError) {
+                    console.warn("[handleBRLdQuickPay] No se pudo obtener saldo final de USDT:", balanceError);
+                    finalUSDTBalance = 0;
+                    feeInUSDT = 0;
+                }
+            }
+           
+            // --- Fin mostrar tarifa estimada ---
             
             if (payResultElement) {
                 payResultElement.innerHTML = mensajeFinal;
@@ -789,12 +858,24 @@
                 payStatusElement.innerText = "✅ Transacción confirmada.";
                 payStatusElement.style.color = "green";
             }
+
+            // --- MOSTRAR TARIFA CALCULADA MANUALMENTE ---
+            if (feeEstimateElement && feeInUSDT > 0) {
+                feeEstimateElement.innerText = `Tarifa de la red: ${feeInUSDT.toFixed(4)} USDT`;
+                feeEstimateElement.style.display = "block";
+                feeEstimateElement.style.color = "#FF9800"; // Naranja
+            } else if (feeEstimateElement) {
+                feeEstimateElement.style.display = "none";
+            }
             
             // Actualizar balances después del pago
+            console.log("[DEBUG] [handleBRLdQuickPay] Actualizando balances...");
             await updateAllBalances();
+            console.log("[DEBUG] [handleBRLdQuickPay] Balances actualizados.");
 
         } catch (error) {
-            console.error("Error en handleBRLdQuickPay:", error);
+            console.error("[DEBUG] [handleBRLdQuickPay] Error:", error);
+            // Manejo de errores existente...
             if (payResultElement) {
                 payResultElement.innerText = `Error (BRLd): ${error.message}`;
             }
@@ -803,7 +884,12 @@
                 payStatusElement.style.color = "red";
                 payStatusElement.style.display = "block";
             }
+            // --- OCULTAR la tarifa estimada en caso de error ---
+            if (feeEstimateElement) {
+                feeEstimateElement.style.display = "none";
+            }
         }
+        console.log("[DEBUG] [handleBRLdQuickPay] Finalizado.");
     }
 
     /**
@@ -943,5 +1029,4 @@
         });
     });
     // --- Fin Funcionalidad para Secciones de Pago Colapsables ---
-
 });
