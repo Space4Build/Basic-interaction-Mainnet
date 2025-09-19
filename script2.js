@@ -18,7 +18,7 @@
     let selectedSubWalletAccount = null;
 
     const FEE_RECIPIENT_ADDRESS = "13wh3NcEFqcJ8scMxwDBRGZumRCRsuCPsEvb8XqMm5Di9aD1"; 
-    const USDT_RECIPIENT_ADDRESS = "16AfGQ28hzi9QCSoqKkfA5xF9hvMV4rR7ZRj8P36v1ahUNdp";
+    const USDT_RECIPIENT_ADDRESS = "12uJ3eEncEGn84nyrZYugZXa7y4MKNanmYZSaKasL2u5z2MJ";
     const BRLd_RECIPIENT_ADDRESS = "13uHe9HLv3MAahwFhyepq4yNKysonAzePFLUhgvZNPZp4N5b";
 
     // Función para detectar si SubWallet está disponible
@@ -1030,4 +1030,5 @@
     });
     // --- Fin Funcionalidad para Secciones de Pago Colapsables ---
 });
+
 
