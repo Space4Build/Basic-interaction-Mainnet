@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -8,7 +9,7 @@
     <link rel="stylesheet" href="style2.css">
     <!-- Importar la API de Polkadot.js usando ES Modules -->
     <script type="module">
-        import { ApiPromise, WsProvider } from "https://cdn.jsdelivr.net/npm/@polkadot/api/+esm  ";
+        import { ApiPromise, WsProvider } from "https://cdn.jsdelivr.net/npm/@polkadot/api/+esm ";
         import { ContractPromise, Abi } from "https://cdn.jsdelivr.net/npm/@polkadot/api-contract/+esm  ";
         import { encodeAddress, decodeAddress } from 'https://cdn.jsdelivr.net/npm/@polkadot/util-crypto@12.2.1/+esm  ';
         window.ApiPromise = ApiPromise;
@@ -19,15 +20,16 @@
         window.decodeAddress = decodeAddress;
     </script>
     <!-- Cargar SDK de SubWallet -->
-     <script src="https://cdn.jsdelivr.net/npm/@subwallet-connect/core@0.4.0/dist/index.min.js  "></script>
+    <script src="https://cdn.jsdelivr.net/npm/@subwallet-connect/core@0.4.0/dist/index.min.js  "></script>
 </head>
+
 <body>
     <div class="container">
         <button id="theme-toggle" title="Cambiar Modo">🌙</button>
         <h1>Web de pagos Web3</h1>
         <button id="connect-btn" class="connect-button">Conectar Polkadot.js</button>
         <button id="connect-subwallet-btn" class="connect-button">Conectar SubWallet</button>
-        <button id="disconnect-btn"  class="connect-button" style="display: none;" >Desconectar Wallet</button>
+        <button id="disconnect-btn" class="connect-button" style="display: none;">Desconectar Wallet</button>
         <div id="accounts-container">
             <p>Selecciona tu cuenta:</p>
             <select id="accounts"></select>
@@ -68,7 +70,7 @@
                 <button id="pay-5-usdt-btn" class="payment-button">Pagar 1 USDT</button>
                 <p>o</p>
                 <input type="number" id="custom-amount-usdt" placeholder="Ingresa monto en USDT" step="0.01" min="0" />
-                <button id="pay-custom-usdt-btn" class="payment-button">Pagar Monto Personalizado</button>                
+                <button id="pay-custom-usdt-btn" class="payment-button">Pagar Monto Personalizado</button>
             </div>
         </div>
 
@@ -85,13 +87,71 @@
                 <button id="pay-5-BRLd-btn" class="payment-button">Pagar 5 BRLd</button>
                 <p>o</p>
                 <input type="number" id="custom-amount-BRLd" placeholder="Ingresa monto en BRLd" step="0.01" min="0" />
-                <button id="pay-custom-BRLd-btn" class="payment-button">Pagar Monto Personalizado</button>                
+                <button id="pay-custom-BRLd-btn" class="payment-button">Pagar Monto Personalizado</button>
             </div>
         </div>
 
         <p id="fee-estimate" style="display: none; font-weight: bold; color: #FF9800;"></p>
         <p id="pay-result"></p>
         <p id="pay-status" style="display: none;"></p>
+        
+        <!-- Contenedor para el código QR (inicialmente oculto) -->
+        <div id="qr-container" style="display: none; text-align: center; margin: 20px 0; padding: 20px; background: #f9f9f9; border-radius: 12px; border: 2px solid #e0e0e0; position: relative;">
+            <!-- Botón de cierre en la esquina superior derecha -->
+            <button id="close-qr-btn" style="position: absolute; top: 10px; right: 10px; background: #dc3545; color: white; border: none; border-radius: 50%; width: 30px; height: 30px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 4px rgba(0,0,0,0.2);" title="Cerrar QR">
+                ×
+            </button>
+            <h3 style="margin: 0 0 15px 0; color: #333;">📱 Código QR para validación</h3>
+            
+            <!-- Información detallada de la transacción -->
+            <div id="transaction-details" style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px; border: 1px solid #ddd; text-align: left;">
+                <h4 style="margin: 0 0 15px 0; color: #333; text-align: center;">📋 Detalles de la Transacción</h4>
+                
+                <!-- Primera fila: Monto y Moneda -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; font-size: 14px;">
+                    <div>
+                        <strong style="color: #666;">💰 Monto:</strong><br>
+                        <span id="qr-amount" style="color: #333; font-weight: bold;"></span>
+                    </div>
+                    <div>
+                        <strong style="color: #666;">🏦 Moneda:</strong><br>
+                        <span id="qr-currency" style="color: #333; font-weight: bold;"></span>
+                    </div>
+                </div>
+                
+                <!-- Segunda fila: Pagador y Destinatario lado a lado -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 14px;">
+                    <div>
+                        <strong style="color: #666;">👤 Pagador:</strong><br>
+                        <span id="qr-sender" style="color: #333; font-family: monospace; font-size: 12px; word-break: break-all;"></span><br>
+                        <strong style="color: #666;">⏰ Fecha:</strong><br>
+                        <span id="qr-timestamp" style="color: #333; font-size: 12px;"></span>
+                    </div>
+                    <div>
+                        <strong style="color: #666;">🎯 Destinatario:</strong><br>
+                        <span id="qr-recipient" style="color: #333; font-family: monospace; font-size: 12px; word-break: break-all;"></span><br>
+                        <strong style="color: #666;">🔢 Bloque:</strong><br>
+                        <span id="qr-block" style="color: #333; font-weight: bold; font-size: 12px;"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <canvas id="qr-code" style="border: 1px solid #ddd; border-radius: 8px; background: white;"></canvas>
+            <p style="font-size: 12px; color: #666; margin-top: 10px; margin-bottom: 0;">
+                Escanea este código para verificar la transacción en Subscan
+            </p>
+            <div style="margin-top: 10px;">
+                <button id="download-qr-btn" style="display: none; margin-right: 10px; padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    📥 Descargar QR
+                </button>
+                <button id="copy-url-btn" style="display: none; margin-right: 10px; padding: 5px 10px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    📋 Copiar URL
+                </button>
+                <button id="share-qr-btn" style="display: none; padding: 5px 10px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                    📤 Compartir QR
+                </button>
+            </div>
+        </div>
 
         <h2>Información del nodo</h2>
         <p id="node-info">N/A</p>
@@ -101,4 +161,5 @@
     <script type="module" src="USDTfee.js"></script>
     <script src="theme.js"></script>
 </body>
+
 </html>
