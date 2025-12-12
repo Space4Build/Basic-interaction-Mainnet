@@ -8,6 +8,22 @@ const USDT_DECIMALS = 6;
 // --- Funciones auxiliares exportables (buenas prácticas) ---
 
 /**
+ * Construye el objeto MultiLocation para USDT.
+ * @returns {object} El objeto MultiLocation para USDT.
+ */
+function buildUsdtFeeAssetMultiLocation() {
+    return {
+        parents: 0,
+        interior: {
+            X2: [
+                { PalletInstance: 50 },
+                { GeneralIndex: 1984 }
+            ]
+        }
+    };
+}
+
+/**
  * Obtiene el balance de USDT para una cuenta dada.
  * @param {ApiPromise} api - La instancia de la API de Polkadot.js conectada.
  * @param {string} accountAddress - La dirección de la cuenta.
@@ -95,7 +111,12 @@ async function sendUSDTBatchPayment(api, injector, fromAccount, toAccount, amoun
 
     // 6. Enviar la transacción y devolver la promesa para manejar el resultado
     return new Promise((resolve, reject) => {
-        batchTx.signAndSend(fromAccount, { signer: injector, ...feeOptions }, async ({ status, events, dispatchError }) => {
+        // Forzar el pago del fee en USDT si el assetId está disponible
+        const signAndSendOptions = { signer: injector, ...feeOptions };
+        // USDT assetId para AssetHub
+        const usdtFeeAssetId = buildUsdtFeeAssetMultiLocation();
+        signAndSendOptions.assetId = usdtFeeAssetId;
+        batchTx.signAndSend(fromAccount, signAndSendOptions, async ({ status, events, dispatchError }) => {
             if (dispatchError) {
                 const decoded = api.registry.findMetaError(dispatchError.asModule);
                 const { documentation, name, section } = decoded;
@@ -114,7 +135,7 @@ async function sendUSDTBatchPayment(api, injector, fromAccount, toAccount, amoun
 
             if (status.isFinalized) {
                 const blockIdentifier = status.asFinalized;
-                
+
                 try {
                     const header = await api.rpc.chain.getHeader(blockIdentifier);
                     const blockNumber = header.number.toNumber();
@@ -131,9 +152,9 @@ async function sendUSDTBatchPayment(api, injector, fromAccount, toAccount, amoun
 
                     // Formatear mensaje
                     const mensajeMonto = amount.toLocaleString("es-ES", { minimumFractionDigits: 4, maximumFractionDigits: 4 });
-                    
+
                     let mensajeFinal = `Monto en USDT: ${mensajeMonto}. Pago finalizado en bloque: ${blockNumber}`;
-                    
+
                     if (extrinsicIndex !== null) {
                         // Asegurarse de que la URL esté limpia
                         const subscanLink = `https://assethub-polkadot.subscan.io/extrinsic/${blockNumber}-${extrinsicIndex}`; // Corregido
@@ -151,6 +172,20 @@ async function sendUSDTBatchPayment(api, injector, fromAccount, toAccount, amoun
                     resolve(mensajeFallback);
                 }
             }
+        }).catch((error) => {
+            console.error("❌ Error en firma/envío USDT (posible cancelación):", error);
+
+            // Si es cancelación de wallet, actualizar estado
+            if (error.message && error.message.includes("Cancelled")) {
+                if (onStatusUpdate) {
+                    onStatusUpdate({ state: 'error', message: '❌ Transacción cancelada.' });
+                }
+            } else {
+                if (onStatusUpdate) {
+                    onStatusUpdate({ state: 'error', message: '❌ Error en el envío.' });
+                }
+            }
+            reject(error);
         });
     });
 }
@@ -195,21 +230,29 @@ export async function payAmountUSDT(api, getInjector, selectedAccount, amountInU
 
         // 4. Ejecutar el pago (lógica compleja)
         const mensajeFinal = await sendUSDTBatchPayment(
-        api,                // 1
-        injector,           // 2
-        selectedAccount,    // 3
-        recipientAddress,   // 4 <- Debe ser una dirección válida
-        amountInUSDT,       // 5 <- Debe ser un número
-        feeRecipientAddress,//
-        {},
-        onStateUpdate
+            api,                // 1
+            injector,           // 2
+            selectedAccount,    // 3
+            recipientAddress,   // 4 <- Debe ser una dirección válida
+            amountInUSDT,       // 5 <- Debe ser un número
+            feeRecipientAddress,//
+            {},
+            onStateUpdate
         );
-        
+
         // 5. Mostrar resultado (delegamos esto al caller para mejor separación de concerns)
         return mensajeFinal;
 
     } catch (error) {
         console.error("🚨 Error en pago rápido USDT (módulo refactorizado):", error);
+
+        // Si es cancelación de wallet, actualizar estado antes de lanzar
+        if (error.message && error.message.includes("Cancelled")) {
+            if (onStateUpdate) {
+                onStateUpdate({ state: 'error', message: '❌ Transacción cancelada.' });
+            }
+        }
+
         throw error; // Re-lanzamos para que el caller maneje la UI
     }
 }
@@ -247,15 +290,15 @@ export async function payCustomAmountUSDT(api, getInjector, selectedAccount, rec
         if (!input) {
             throw new Error(`Elemento input con ID '${inputElementId}' no encontrado.`);
         }
-        
+
         const rawAmount = input.value.trim();
-         console.log(`[payCustomAmountUSDT] Raw amount from input '${inputElementId}': '${rawAmount}' (type: ${typeof rawAmount})`);
+        // debug: raw input
         if (!rawAmount || isNaN(rawAmount)) {
             throw new Error("Ingresa un monto válido en USDT.");
         }
 
         const amountInUSDT = parseFloat(rawAmount);
-        console.log(`[payCustomAmountUSDT] Parsed amountInUSDT: ${amountInUSDT} (type: ${typeof amountInUSDT})`);
+        // parsed amountInUSDT
         if (amountInUSDT <= 0) {
             throw new Error("El monto en USDT debe ser mayor a 0.");
         }
@@ -275,21 +318,29 @@ export async function payCustomAmountUSDT(api, getInjector, selectedAccount, rec
 
         // 6. Ejecutar el pago
         const mensajeFinal = await sendUSDTBatchPayment(
-        api, 
-        injector, 
-        selectedAccount, 
-        recipientAddress, // <- 4to argumento
-        amountInUSDT,     // <- 5to argumento
-        feeRecipientAddress, // <- 6to argumento
-        {},
-        onStatusUpdate 
-    );
-        
+            api,
+            injector,
+            selectedAccount,
+            recipientAddress, // <- 4to argumento
+            amountInUSDT,     // <- 5to argumento
+            feeRecipientAddress, // <- 6to argumento
+            {},
+            onStatusUpdate
+        );
+
         // 7. Devolver resultado
         return mensajeFinal;
 
     } catch (error) {
         console.error("🚨 Error en pago personalizado USDT (módulo refactorizado):", error);
+
+        // Si es cancelación de wallet, actualizar estado antes de lanzar
+        if (error.message && error.message.includes("Cancelled")) {
+            if (onStatusUpdate) {
+                onStatusUpdate({ state: 'error', message: '❌ Transacción cancelada.' });
+            }
+        }
+
         throw error; // Re-lanzamos para que el caller maneje la UI
     }
 }
