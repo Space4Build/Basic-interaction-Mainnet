@@ -535,20 +535,38 @@ function showShareOptions(message, transactionData) {
 function shareToWhatsApp(message, transactionData) {
     try {
         console.log("[QR Generator] Compartiendo por WhatsApp...");
-        
-        // Crear URL de WhatsApp Web
+        // Si el navegador soporta Web Share API, usarla (mejor UX en móviles)
         const encodedMessage = encodeURIComponent(message);
-        const whatsappUrl = `https://web.whatsapp.com/send?text=${encodedMessage}`;
+        const whatsappWebUrl = `https://api.whatsapp.com/send?text=${encodedMessage}`;
+        const whatsappAppUrl = `whatsapp://send?text=${encodedMessage}`;
 
-        //Abrir Whatsapp Web
-        window.open(whatsappUrl, '_blank');
+        if (navigator.share) {
+            try {
+                navigator.share({
+                    title: 'Transacción verificada',
+                    text: message,
+                    url: transactionData.subscanUrl || undefined
+                });
+                return;
+            } catch (err) {
+                console.warn('[QR Generator] navigator.share falló, cayendo al deep link:', err);
+            }
+        }
 
-        //Mostrar instrucciones        
-        setTimeout(() => {
-            alert(`📱 WhatsApp Web abierto!\n\n1. Adjunta la imagen del QR (descarga primero si e snecesario)\n2. Envía el mensaje\n\n💡 Tip: Puedes descargar el QR con el botón "Descargar QR"`);
-            
-            }, 1000);
-        
+        // Intentar abrir la app nativa mediante esquema deep-link; si falla, abrir la URL web como fallback
+        try {
+            // Navegar al esquema de la app (esto en móviles abrirá la app si está instalada)
+            window.location.href = whatsappAppUrl;
+
+            // Si después de un tiempo la app no respondió, abrir la versión web en una nueva pestaña
+            setTimeout(() => {
+                window.open(whatsappWebUrl, '_blank');
+                alert('📱 Si WhatsApp no se abrió, se ha abierto WhatsApp Web como fallback.\n\n1. Descarga el QR si necesitas adjuntarlo.\n2. Envía el mensaje.');
+            }, 1200);
+        } catch (err) {
+            console.warn('[QR Generator] Error abriendo deep link WhatsApp, usando web:', err);
+            window.open(whatsappWebUrl, '_blank');
+        }
     } catch (error) {
         console.error("[QR Generator] Error compartiendo por WhatsApp:", error);
         alert("Error al abrir WhatsApp. Intenta copiar el mensaje manualmente.");
@@ -563,17 +581,36 @@ function shareToWhatsApp(message, transactionData) {
 function shareToTelegram(message, transactionData) {
     try {
         console.log("[QR Generator] Compartiendo por Telegram...");
+        const encodedMessage = encodeURIComponent(message);
+        const telegramWebUrl = `https://t.me/share/url?url=${encodeURIComponent(transactionData.subscanUrl || '')}&text=${encodedMessage}`;
+        const telegramAppUrl = `tg://share?text=${encodedMessage}`; // esquema de Telegram (puede variar según plataforma)
 
-        const encodeMessage = encodeURIComponent(message);
-        const telegramUrl = `https://t.me/share/url=${encodeURIComponent(transactionData.subscanUrl)}&text=${encodeURIComponent(message)}`;
+        if (navigator.share) {
+            try {
+                navigator.share({
+                    title: 'Transacción verificada',
+                    text: message,
+                    url: transactionData.subscanUrl || undefined
+                });
+                return;
+            } catch (err) {
+                console.warn('[QR Generator] navigator.share falló, cayendo al deep link Telegram:', err);
+            }
+        }
 
-        window.open(telegramUrl, '_blank');
-        
-        setTimeout(() => {
-            alert(`✈️ Telegram Web abierto!\n\n1. Descarga el QR con el botón "Descargar QR"\n2. Adjunta la imagen del QR al mensaje\n3. Agrega manualmente: ${transactionData.subscanUrl}\n4. Envía el mensaje\n\n💡 El mensaje ya está pre-escrito sin duplicar la URL`);
+        try {
+            // Intentar abrir la app de Telegram
+            window.location.href = telegramAppUrl;
 
-            
-        }, 1000);
+            setTimeout(() => {
+                // Fallback a web
+                window.open(telegramWebUrl, '_blank');
+                alert('✈️ Si Telegram no se abrió, se ha abierto Telegram Web como fallback.\n\n1. Descarga el QR con el botón "Descargar QR"\n2. Adjunta la imagen del QR al mensaje\n3. Envía el mensaje.');
+            }, 1200);
+        } catch (err) {
+            console.warn('[QR Generator] Error abriendo deep link Telegram, usando web:', err);
+            window.open(telegramWebUrl, '_blank');
+        }
         
     } catch (error) {
         console.error("[QR Generator] Error compartiendo por Telegram:", error);
