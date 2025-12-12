@@ -372,6 +372,104 @@ async function downloadQRAsImage(transactionData) {
 }
 
 /**
+ * Crea un Blob PNG con la imagen compuesta (QR + detalles) sin descargarla.
+ * @param {Object} transactionData
+ * @returns {Promise<Blob>} Blob PNG
+ */
+async function createCompositeImageBlob(transactionData) {
+    return new Promise((resolve, reject) => {
+        try {
+            const qrCanvas = document.getElementById('qr-code');
+            if (!qrCanvas) {
+                return reject(new Error('Canvas QR no encontrado'));
+            }
+
+            const qrSize = qrCanvas.width || 256;
+            const padding = 20;
+            const detailsWidth = 420;
+            const width = padding + qrSize + padding + detailsWidth + padding;
+            const height = Math.max(qrSize + padding * 2, 360);
+
+            const out = document.createElement('canvas');
+            out.width = width;
+            out.height = height;
+            const ctx = out.getContext('2d');
+
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
+            ctx.fillStyle = '#f8f9fa';
+            const cardX = padding / 2;
+            const cardY = padding / 2;
+            const cardW = width - padding;
+            const cardH = height - padding;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(cardX, cardY, cardW, cardH);
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(cardX, cardY, cardW, cardH);
+
+            const qrX = padding + 10;
+            const qrY = padding + 10;
+            ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize);
+
+            const textX = qrX + qrSize + 20;
+            let textY = qrY + 24;
+            ctx.fillStyle = '#222';
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText('Transacción Verificada', textX, textY);
+
+            ctx.font = '14px Arial';
+            textY += 30;
+
+            const drawLabelValue = (label, value) => {
+                ctx.fillStyle = '#666';
+                ctx.font = 'bold 12px Arial';
+                ctx.fillText(label, textX, textY);
+                ctx.fillStyle = '#111';
+                ctx.font = '14px monospace';
+                ctx.fillText(value, textX, textY + 18);
+                textY += 40;
+            };
+
+            drawLabelValue('Monto:', `${Number(transactionData.amount).toLocaleString('es-ES', { minimumFractionDigits: 2 })} ${transactionData.currency}`);
+            drawLabelValue('Pagador:', transactionData.senderAddress || 'N/A');
+            drawLabelValue('Destinatario:', transactionData.recipientAddress || 'N/A');
+            drawLabelValue('Bloque:', transactionData.blockNumber ? `#${transactionData.blockNumber}` : 'N/A');
+            drawLabelValue('Fecha:', transactionData.timestamp ? new Date(transactionData.timestamp).toLocaleString('es-ES') : 'N/A');
+
+            const urlText = transactionData.subscanUrl || '';
+            if (urlText) {
+                ctx.fillStyle = '#007bff';
+                ctx.font = '12px Arial';
+                const maxWidth = detailsWidth - 20;
+                const words = urlText.split(' ');
+                let line = '';
+                for (let i = 0; i < words.length; i++) {
+                    const testLine = line + words[i] + ' ';
+                    const metrics = ctx.measureText(testLine);
+                    if (metrics.width > maxWidth && i > 0) {
+                        ctx.fillText(line, textX, textY + 8);
+                        line = words[i] + ' ';
+                        textY += 18;
+                    } else {
+                        line = testLine;
+                    }
+                }
+                if (line) ctx.fillText(line.trim(), textX, textY + 8);
+            }
+
+            out.toBlob((blob) => {
+                if (!blob) return reject(new Error('No se generó blob')); 
+                resolve(blob);
+            }, 'image/png');
+
+        } catch (err) {
+            reject(err);
+        }
+    });
+}
+
+/**
  * Copia la URL al portapapeles
  * @param {string} url - URL a copiar
  */
@@ -532,40 +630,51 @@ function showShareOptions(message, transactionData) {
  * @param {string} message - Mensaje a compartir
  * @param {Object} transactionData - Datos de la transacción
  */
-function shareToWhatsApp(message, transactionData) {
+async function shareToWhatsApp(message, transactionData) {
     try {
         console.log("[QR Generator] Compartiendo por WhatsApp...");
-        // Si el navegador soporta Web Share API, usarla (mejor UX en móviles)
-        const encodedMessage = encodeURIComponent(message);
-        const whatsappWebUrl = `https://api.whatsapp.com/send?text=${encodedMessage}`;
-        const whatsappAppUrl = `whatsapp://send?text=${encodedMessage}`;
-
-        if (navigator.share) {
-            try {
-                navigator.share({
-                    title: 'Transacción verificada',
-                    text: message,
-                    url: transactionData.subscanUrl || undefined
-                });
-                return;
-            } catch (err) {
-                console.warn('[QR Generator] navigator.share falló, cayendo al deep link:', err);
-            }
-        }
-
-        // Intentar abrir la app nativa mediante esquema deep-link; si falla, abrir la URL web como fallback
+        // Intentar enviar imagen y texto usando Web Share API con archivos (si está soportado)
         try {
-            // Navegar al esquema de la app (esto en móviles abrirá la app si está instalada)
-            window.location.href = whatsappAppUrl;
+            const blob = await createCompositeImageBlob(transactionData);
+            const file = new File([blob], `transaction-qr-${Date.now()}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+                await navigator.share({ files: [file], text: message, title: 'Transacción verificada' });
+                return;
+            }
 
-            // Si después de un tiempo la app no respondió, abrir la versión web en una nueva pestaña
-            setTimeout(() => {
-                window.open(whatsappWebUrl, '_blank');
-                alert('📱 Si WhatsApp no se abrió, se ha abierto WhatsApp Web como fallback.\n\n1. Descarga el QR si necesitas adjuntarlo.\n2. Envía el mensaje.');
-            }, 1200);
-        } catch (err) {
-            console.warn('[QR Generator] Error abriendo deep link WhatsApp, usando web:', err);
+            // Si no se puede compartir archivos, intentar copiar la imagen al portapapeles y luego abrir el deep link/web
+            try {
+                if (navigator.clipboard && window.ClipboardItem) {
+                    await navigator.clipboard.write([new ClipboardItem({ ['image/png']: blob })]);
+                    // Abrir deep link para WhatsApp (app) o web como fallback
+                    const whatsappAppUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+                    const whatsappWebUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+                    // Intentar app
+                    window.location.href = whatsappAppUrl;
+                    setTimeout(() => {
+                        window.open(whatsappWebUrl, '_blank');
+                        alert('Imagen copiada al portapapeles. Pega la imagen en el chat de WhatsApp (mantén presionado y pega).');
+                    }, 900);
+                    return;
+                }
+            } catch (clipErr) {
+                console.warn('[QR Generator] No fue posible copiar imagen al portapapeles:', clipErr);
+            }
+
+            // Último recurso: abrir enlace web y guiar al usuario a adjuntar la imagen manualmente
+            const whatsappWebUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
             window.open(whatsappWebUrl, '_blank');
+            alert('No fue posible adjuntar la imagen automáticamente. Descarga el QR y adjúntalo manualmente.');
+
+        } catch (err) {
+            console.warn('[QR Generator] Falló intento de compartir imagen, cayendo a comportamiento previo:', err);
+            // Comportamiento previo: abrir WhatsApp Web
+            const encodedMessage = encodeURIComponent(message);
+            const whatsappUrl = `https://web.whatsapp.com/send?text=${encodedMessage}`;
+            window.open(whatsappUrl, '_blank');
+            setTimeout(() => {
+                alert(`📱 WhatsApp Web abierto!\n\n1. Adjunta la imagen del QR (descarga primero si es necesario)\n2. Envía el mensaje\n\n💡 Tip: Puedes descargar el QR con el botón "Descargar QR"`);
+            }, 1000);
         }
     } catch (error) {
         console.error("[QR Generator] Error compartiendo por WhatsApp:", error);
@@ -578,38 +687,49 @@ function shareToWhatsApp(message, transactionData) {
  * @param {string} message - Mensaje a compartir
  * @param {Object} transactionData - Datos de la transacción
  */
-function shareToTelegram(message, transactionData) {
+async function shareToTelegram(message, transactionData) {
     try {
         console.log("[QR Generator] Compartiendo por Telegram...");
-        const encodedMessage = encodeURIComponent(message);
-        const telegramWebUrl = `https://t.me/share/url?url=${encodeURIComponent(transactionData.subscanUrl || '')}&text=${encodedMessage}`;
-        const telegramAppUrl = `tg://share?text=${encodedMessage}`; // esquema de Telegram (puede variar según plataforma)
-
-        if (navigator.share) {
-            try {
-                navigator.share({
-                    title: 'Transacción verificada',
-                    text: message,
-                    url: transactionData.subscanUrl || undefined
-                });
-                return;
-            } catch (err) {
-                console.warn('[QR Generator] navigator.share falló, cayendo al deep link Telegram:', err);
-            }
-        }
-
+        // Intentar enviar imagen y texto usando Web Share API con archivos (si está soportado)
         try {
-            // Intentar abrir la app de Telegram
-            window.location.href = telegramAppUrl;
+            const blob = await createCompositeImageBlob(transactionData);
+            const file = new File([blob], `transaction-qr-${Date.now()}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+                await navigator.share({ files: [file], text: message, title: 'Transacción verificada' });
+                return;
+            }
 
-            setTimeout(() => {
-                // Fallback a web
-                window.open(telegramWebUrl, '_blank');
-                alert('✈️ Si Telegram no se abrió, se ha abierto Telegram Web como fallback.\n\n1. Descarga el QR con el botón "Descargar QR"\n2. Adjunta la imagen del QR al mensaje\n3. Envía el mensaje.');
-            }, 1200);
-        } catch (err) {
-            console.warn('[QR Generator] Error abriendo deep link Telegram, usando web:', err);
+            // Intentar copiar imagen al portapapeles y luego abrir app/web
+            try {
+                if (navigator.clipboard && window.ClipboardItem) {
+                    await navigator.clipboard.write([new ClipboardItem({ ['image/png']: blob })]);
+                    const telegramAppUrl = `tg://msg?text=${encodeURIComponent(message)}`;
+                    const telegramWebUrl = `https://t.me/share/url?url=${encodeURIComponent(transactionData.subscanUrl || '')}&text=${encodeURIComponent(message)}`;
+                    window.location.href = telegramAppUrl;
+                    setTimeout(() => {
+                        window.open(telegramWebUrl, '_blank');
+                        alert('Imagen copiada al portapapeles. Pega la imagen en el chat de Telegram (mantén presionado y pega).');
+                    }, 900);
+                    return;
+                }
+            } catch (clipErr) {
+                console.warn('[QR Generator] No fue posible copiar imagen al portapapeles:', clipErr);
+            }
+
+            // Fallback: abrir Telegram Web
+            const encodedMessage = encodeURIComponent(message);
+            const telegramWebUrl = `https://t.me/share/url?url=${encodeURIComponent(transactionData.subscanUrl || '')}&text=${encodedMessage}`;
             window.open(telegramWebUrl, '_blank');
+            alert('No fue posible adjuntar la imagen automáticamente. Descarga el QR y adjúntalo manualmente.');
+
+        } catch (err) {
+            console.warn('[QR Generator] Falló intento de compartir imagen en Telegram, usando web:', err);
+            const encodedMessage = encodeURIComponent(message);
+            const telegramUrl = `https://t.me/share/url=${encodeURIComponent(transactionData.subscanUrl)}&text=${encodedMessage}`;
+            window.open(telegramUrl, '_blank');
+            setTimeout(() => {
+                alert(`✈️ Telegram Web abierto!\n\n1. Descarga el QR con el botón "Descargar QR"\n2. Adjunta la imagen del QR al mensaje\n3. Agrega manualmente: ${transactionData.subscanUrl}\n4. Envía el mensaje\n\n💡 El mensaje ya está pre-escrito sin duplicar la URL`);
+            }, 1000);
         }
         
     } catch (error) {
