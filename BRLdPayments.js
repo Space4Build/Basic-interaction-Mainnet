@@ -43,11 +43,35 @@ export async function getBRLdBalance(api, accountAddress) {
  * @returns {Promise<{hasFunds: boolean, balance: number}>} 
  */
 export async function hasSufficientBRLd(api, accountAddress, requiredAmount) {
-    const balance = await getBRLdBalance(api, accountAddress);
-    return {
-        hasFunds: balance >= requiredAmount,
-        balance: balance
-    };
+    if (!api) {
+        console.warn("hasSufficientBRLd: API no proporcionada.");
+        return { hasFunds: false, balance: 0 };
+    }
+    if (!accountAddress) {
+        console.warn("hasSufficientBRLd: Dirección de cuenta no proporcionada.");
+        return { hasFunds: false, balance: 0 };
+    }
+    if (typeof requiredAmount !== 'number' || requiredAmount < 0) {
+        console.warn("hasSufficientBRLd: Monto requerido inválido.");
+        return { hasFunds: false, balance: 0 };
+    }
+
+    try {
+        const assetAccountInfo = await api.query.assets.account(BRLd_ASSET_ID, accountAddress);
+        if (assetAccountInfo.isSome) {
+            const balance = assetAccountInfo.unwrap().balance;
+            const formattedBalance = Number(balance) / (10 ** BRLd_DECIMALS);
+            return {
+                hasFunds: formattedBalance >= requiredAmount,
+                balance: formattedBalance
+            };
+        }
+        return { hasFunds: false, balance: 0 }; // La cuenta no tiene registros para este activo
+    } catch (error) {
+        console.error("Error obteniendo balance BRLd:", error);
+        // No alertamos aquí para no interrumpir el flujo, solo logueamos
+        return { hasFunds: false, balance: 0 };
+    }
 }
 
 // --- Funciones principales de pago ---
@@ -63,76 +87,84 @@ export async function hasSufficientBRLd(api, accountAddress, requiredAmount) {
  * @param {object} feeOptions - Opciones para el pago de tarifas (opcional).
  * @returns {Promise<string>} Un mensaje de resultado.
  */
-async function sendBRLdBatchPayment(api, injector, fromAccount, toAccount, amount, feeRecipientAddress, feeOptions = {}, onStatusUpdate) {
-    // 1. Validaciones iniciales
+async function sendBRLdBatchPayment(api, injector, fromAccount, toAccount, amount, feeRecipientAddress, feeOptions = {}, onStatusUpdate, usdtFeeAssetId) {
+    // --- 1. Validaciones iniciales ---
+
     if (!api) throw new Error("API no proporcionada a sendBRLdBatchPayment");
     if (!injector) throw new Error("Injector no proporcionado a sendBRLdBatchPayment");
     if (!fromAccount) throw new Error("Cuenta de origen no proporcionada a sendBRLdBatchPayment");
     if (!toAccount) throw new Error("Cuenta de destino no proporcionada a sendBRLdBatchPayment");
     if (typeof amount !== 'number' || amount <= 0) throw new Error("Monto inválido proporcionado a sendBRLdBatchPayment");
     if (!feeRecipientAddress) throw new Error("Dirección del destinatario de la tarifa no proporcionada a sendBRLdBatchPayment");
+    // --- Fin 1. Validaciones iniciales ---
 
-    // --- Notificar estado inicial si se proporciona el callback ---
-    if (onStatusUpdate) {
-        onStatusUpdate({ state: 'processing', message: '🔄 Procesando transacción...' });
-    }
-    // --- Fin notificación inicial ---
-
-    // 2. Calcular los montos (99% destinatario, 1% fee)
+    // --- 2. Calcular los montos (99% destinatario, 1% fee) ---
     const recipientAmount = amount * 0.99;
     const feeAmount = amount * 0.01;
 
-    // 3. Convertir a Plancks/ unidades atómicas (BRLd tiene 10 decimales)
+    // Convertir a Plancks/ unidades atómicas (BRLd tiene 10 decimales)
     const recipientAmountPlancks = BigInt(Math.floor(recipientAmount * (10 ** BRLd_DECIMALS)));
     const feeAmountPlancks = BigInt(Math.floor(feeAmount * (10 ** BRLd_DECIMALS)));
+    // --- Fin 2. Calcular los montos ---
 
-    // 4. Crear las transacciones usando el pallet de assets
+    // --- 3. Crear las transacciones usando el pallet de assets ---
     const transferToRecipient = api.tx.assets.transfer(BRLd_ASSET_ID, toAccount, recipientAmountPlancks);
     const transferFeeToYou = api.tx.assets.transfer(BRLd_ASSET_ID, feeRecipientAddress, feeAmountPlancks);
 
-    // 5. Agruparlas en un batch
+    // Agruparlas en un batch
     const batchTx = api.tx.utility.batchAll([transferToRecipient, transferFeeToYou]);
+    // --- Fin 3. Crear las transacciones ---
 
-    // 6. Enviar la transacción y devolver la promesa para manejar el resultado
+    // --- 4. Notificar estado inicial si se proporciona el callback ---
+    if (onStatusUpdate) {
+        onStatusUpdate({ state: 'processing', message: '🔄 Procesando transacción...' });
+    }
+    // --- Fin 4. Notificar estado inicial ---
+
+    // --- 5. Enviar la transacción y devolver la promesa para manejar el resultado ---
+
     return new Promise((resolve, reject) => {
-        batchTx.signAndSend(fromAccount, { signer: injector, ...feeOptions }, async ({ status, events, dispatchError }) => {
+        // Preparar las opciones para signAndSend
+        const signAndSendOptions = { signer: injector, ...feeOptions };
+        // Si se proporcionó usdtFeeAssetId, añadirlo a las opciones para pagar tarifas con USDT
+        if (usdtFeeAssetId) {
+            signAndSendOptions.assetId = usdtFeeAssetId;
+        }
+
+        batchTx.signAndSend(fromAccount, signAndSendOptions, async ({ status, events, dispatchError }) => {
             if (dispatchError) {
-                const decoded = api.registry.findMetaError(dispatchError.asModule);
-                const { documentation, name, section } = decoded;
-                const errorMsg = `Error en pago BRLd (${section}.${name}): ${documentation.join(' ')}`;
-                console.error(`❌ ${errorMsg}`);
-                
                 // --- Notificar error si se proporciona el callback ---
                 if (onStatusUpdate) {
                     onStatusUpdate({ state: 'error', message: '❌ Error en la transacción.' });
                 }
                 // --- Fin notificación error ---
-                
+
+                const decoded = api.registry.findMetaError(dispatchError.asModule);
+                const { documentation, name, section } = decoded;
+                const errorMsg = `Error en pago BRLd (${section}.${name}): ${documentation.join(' ')}`;
+                console.error(`❌ ${errorMsg}`);
                 reject(new Error(errorMsg));
                 return;
             }
 
-            // --- Manejo de estado isInBlock ---
-            // Cambiamos la condición para manejar isInBlock por separado
             if (status.isInBlock) {
                 // --- Notificar "Incluida en bloque" si se proporciona el callback ---
                 if (onStatusUpdate) {
-                    onStatusUpdate({ 
-                        state: 'inBlock', 
-                        message: '🔄 Incluida en bloque. Esperando confirmación final...' 
+                    onStatusUpdate({
+                        state: 'inBlock',
+                        message: '🔄 Incluida en bloque. Esperando confirmación final...'
                     });
                 }
                 // --- Fin notificación isInBlock ---
-                // No resolvemos aún, esperamos la finalización completa
-                // Salir temprano para no continuar con el bloque isFinalized en esta iteración
-                return; 
-            }
-            // --- Fin manejo de estado isInBlock ---
 
-            // --- Manejo de estado isFinalized ---
+                if (!status.isFinalized) {
+                    return;
+                }
+            }
+
             if (status.isFinalized) {
                 const blockIdentifier = status.asFinalized;
-                
+
                 try {
                     const header = await api.rpc.chain.getHeader(blockIdentifier);
                     const blockNumber = header.number.toNumber();
@@ -149,9 +181,10 @@ async function sendBRLdBatchPayment(api, injector, fromAccount, toAccount, amoun
 
                     // Formatear mensaje
                     const mensajeMonto = amount.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                    // Ya no usamos status.isFinalized aquí porque este bloque solo se ejecuta si es true
+
+
                     let mensajeFinal = `Monto en BRLd: ${mensajeMonto}. Pago finalizado en bloque: ${blockNumber}`;
-                    
+
                     if (extrinsicIndex !== null) {
                         // Limpiar espacios extra en la URL
                         const subscanLink = `https://assethub-polkadot.subscan.io/extrinsic/${blockNumber}-${extrinsicIndex}`;
@@ -160,23 +193,37 @@ async function sendBRLdBatchPayment(api, injector, fromAccount, toAccount, amoun
                     }
 
                     console.log(`✅ Pago BRLd procesado: ${mensajeFinal}`);
-                    
-                    // La promesa se resuelve, lo cual indica éxito final. 
-                    // El handler en script2.js puede usar esto para mostrar el estado final.
+
                     resolve(mensajeFinal);
 
                 } catch (blockError) {
                     console.error("❌ No se pudo obtener información del bloque para BRLd:", blockError);
                     const mensajeMonto = amount.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                     const mensajeFallback = `Monto en BRLd: ${mensajeMonto}. Pago confirmado, detalles del bloque no disponibles.`;
-                    
+
                     resolve(mensajeFallback);
                 }
             }
-            // --- Fin manejo de estado isFinalized ---
+        }).catch((error) => {
+            console.error("❌ Error en firma/envío BRLd (posible cancelación):", error);
+
+            // Si es cancelación de wallet, actualizar estado
+            if (error.message && error.message.includes("Cancelled")) {
+                if (onStatusUpdate) {
+                    onStatusUpdate({ state: 'error', message: '❌ Transacción cancelada.' });
+                }
+            } else {
+                if (onStatusUpdate) {
+                    onStatusUpdate({ state: 'error', message: '❌ Error en el envío.' });
+                }
+            }
+            reject(error);
         });
     });
+    // --- Fin 5. Enviar la transacción ---
 }
+// --- Fin sendBRLdBatchPayment ---
+
 
 /**
  * Realiza un pago rápido en BRLd.
@@ -187,9 +234,13 @@ async function sendBRLdBatchPayment(api, injector, fromAccount, toAccount, amoun
  * @param {string} recipientAddress - La dirección del destinatario.
  * @param {string} feeRecipientAddress - La dirección del destinatario de la tarifa (1%).
  */
-export async function payAmountBRLd(api, getInjector, selectedAccount, amountInBRLd, recipientAddress, feeRecipientAddress, onStateUpdate) {
+export async function payAmountBRLd(api, getInjector, selectedAccount, amountInBRLd, recipientAddress, feeRecipientAddress, onStatusUpdate, usdtFeeAssetId) {
+    // Inicio del flujo de pago BRLd
+    //let feeEstimateInUSDT = null; // Variable para almacenar la estimación
+
     try {
-        // 1. Validaciones iniciales
+        // --- 1. Validaciones iniciales ---
+        // Validaciones iniciales
         if (!api) {
             throw new Error("La API no está conectada.");
         }
@@ -208,35 +259,125 @@ export async function payAmountBRLd(api, getInjector, selectedAccount, amountInB
         if (!feeRecipientAddress) {
             throw new Error("Dirección del destinatario de la tarifa no proporcionada.");
         }
+        // Validaciones completadas
+        // --- Fin 1. Validaciones iniciales ---
 
-        // 2. Confirmación del usuario
-        const confirmMsg = `¿Estás seguro de pagar ${amountInBRLd.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BRLd?`;
-        if (!confirm(confirmMsg)) return;
+        // --- 2. Calcular los montos (99% destinatario, 1% fee) ---
 
-        // 3. Obtener injector (puede ser async)
+        const recipientAmount = amountInBRLd * 0.99;
+        const feeAmount = amountInBRLd * 0.01;
+
+        // Convertir a Plancks/ unidades atómicas (BRLd tiene 10 decimales)
+        const recipientAmountPlancks = BigInt(Math.floor(recipientAmount * (10 ** BRLd_DECIMALS)));
+        const feeAmountPlancks = BigInt(Math.floor(feeAmount * (10 ** BRLd_DECIMALS)));
+        // Montos convertidos a plancks
+        // --- Fin 2. Calcular los montos ---
+
+        // --- 3. Crear las transacciones usando el pallet de assets ---
+        const transferToRecipient = api.tx.assets.transfer(BRLd_ASSET_ID, recipientAddress, recipientAmountPlancks);
+        const transferFeeToYou = api.tx.assets.transfer(BRLd_ASSET_ID, feeRecipientAddress, feeAmountPlancks);
+        // Transacciones creadas
+
+        // Agruparlas en un batch
+        const batchTx = api.tx.utility.batchAll([transferToRecipient, transferFeeToYou]);
+        // Batch creado
+        // --- Fin 3. Crear las transacciones ---
+
+        // --- 4. ESTIMAR la tarifa en USDT usando XcmPaymentApi (SOLO si se proporciona usdtFeeAssetId) ---
+        /*       if (usdtFeeAssetId) {
+                    try {
+                        // Iniciar estimación de tarifa en USDT (código comentado)
+                        // a. Obtener el weight de la transacción (usando paymentInfo con assetId)
+                        const paymentInfo = await batchTx.paymentInfo(selectedAccount);
+                        const weight = paymentInfo.weight;
+        
+                        // b. Llamar al Runtime API XcmPaymentApi para convertir weight -> tarifa en USDT
+                        // Verificar que el API esté disponible
+                        if (api.call && api.call.xcmPaymentApi && typeof api.call.xcmPaymentApi.queryWeightToAssetFee === 'function') {
+                            const feeInUSDTPlancksResult = await api.call.xcmPaymentApi.queryWeightToAssetFee(weight, usdtFeeAssetId);
+                            // c. Extraer el valor numérico de la propiedad 'ok'
+                            let feeInUSDTPlancks;
+                            if (feeInUSDTPlancksResult.isOk) {
+                                feeInUSDTPlancks = feeInUSDTPlancksResult.asOk;
+                            } else if (feeInUSDTPlancksResult.ok !== undefined) {
+                                feeInUSDTPlancks = feeInUSDTPlancksResult.ok;
+                            } else {
+                                feeInUSDTPlancks = feeInUSDTPlancksResult;
+                            }
+                            // d. Convertir a unidades legibles de USDT (USDT tiene 6 decimales)
+                            feeEstimateInUSDT = Number(feeInUSDTPlancks) / (10 ** 6);
+        
+                            const { hasFunds: hasUSDTFunds, balance: usdtBalance } = await hasSufficientUSDT(api, selectedAccount, feeEstimateInUSDT);
+                            if (!hasUSDTFunds) {
+                                throw new Error(`Saldo insuficiente de USDT para pagar tarifas. Necesitas al menos ${feeEstimateInUSDT.toFixed(6)} USDT, pero tu saldo es ${usdtBalance.toFixed(6)} USDT.`);
+                            }
+                        } else {
+                            console.warn("[payAmountBRLd] XcmPaymentApi.queryWeightToAssetFee no disponible en esta API. Usando fallback.");
+                            if (api.call) {
+                                console.warn("[payAmountBRLd] Módulos disponibles en api.call:", Object.keys(api.call));
+                            }
+                            feeEstimateInUSDT = null;
+                        }
+                    } catch (feeEstimateError) {
+                        console.error("[payAmountBRLd] Error al estimar la tarifa en USDT:", feeEstimateError);
+                        feeEstimateInUSDT = null;
+                    }
+                }*/
+        // --- Fin 4. ESTIMAR la tarifa en USDT ---
+
+        // --- 5. Confirmación del usuario ---
+        let confirmMsg = `¿Estás seguro de pagar ${amountInBRLd.toLocaleString("es-ES", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} BRLd?`;
+        /*        if (feeEstimateInUSDT !== null) {
+                     confirmMsg += `\n\nTarifa estimada: ${feeEstimateInUSDT.toFixed(6)} USDT.`;
+                } else if (usdtFeeAssetId) {
+                    // Si se intentó estimar pero falló
+                    confirmMsg += `\n\n(Tarifa en USDT: No disponible para estimación, se cobrará de todas formas)`;
+                }
+        */
+        if (!confirm(confirmMsg)) {
+            // Si el usuario cancela, retornar null (no es un error)
+            return null;
+        }
+        // --- Fin 5. Confirmación del usuario ---
+
+        // --- 6. Obtener injector (puede ser async) ---
         const injector = await getInjector();
 
-        // 4. Ejecutar el pago (lógica compleja)
+        // --- Fin 6. Obtener injector ---
+
+        // --- 7. Ejecutar el pago (lógica compleja) - PASANDO el assetId ---
+        // Enviando batch de pago BRLd
+
         const mensajeFinal = await sendBRLdBatchPayment(
-        api,                // 1
-        injector,           // 2
-        selectedAccount,    // 3
-        recipientAddress,   // 4 <- Debe ser una dirección válida
-        amountInBRLd,       // 5 <- Debe ser un número
-        feeRecipientAddress,//
-        {},
-        onStateUpdate
+            api,                // 1
+            injector,           // 2
+            selectedAccount,    // 3
+            recipientAddress,   // 4 <- Debe ser una dirección válida
+            amountInBRLd,       // 5 <- Debe ser un número
+            feeRecipientAddress,// 6 <- Debe ser una dirección válida
+            {},                 // 7 - feeOptions (objeto vacío)
+            onStatusUpdate,     // 8 - Callback de estado
+            usdtFeeAssetId      // 9 - PASAR el assetId para pagar tarifas con USDT 
         );
-        
-        // 5. Mostrar resultado (delegamos esto al caller para mejor separación de concerns)
-        return mensajeFinal;
+        // sendBRLdBatchPayment completado
+
+        // --- 8. Devolver tanto el mensaje como la estimación de tarifa ---
+        return { mensajeFinal/*, feeEstimateInUSDT*/ };
+        // --- Fin 8. Devolver tanto el mensaje como la estimación de tarifa ---
 
     } catch (error) {
         console.error("🚨 Error en pago rápido BRLd (módulo refactorizado):", error);
+
+        // Si es cancelación de wallet, actualizar estado antes de lanzar
+        if (error.message && error.message.includes("Cancelled")) {
+            if (onStatusUpdate) {
+                onStatusUpdate({ state: 'error', message: '❌ Transacción cancelada.' });
+            }
+        }
+
         throw error; // Re-lanzamos para que el caller maneje la UI
     }
 }
-
 /**
  * Realiza un pago personalizado en BRLd.
  * @param {ApiPromise} api - La instancia de la API de Polkadot.js conectada.
@@ -246,7 +387,7 @@ export async function payAmountBRLd(api, getInjector, selectedAccount, amountInB
  * @param {string} feeRecipientAddress - La dirección del destinatario de la tarifa (1%).
  * @param {string} inputElementId - El ID del elemento input donde el usuario ingresa el monto.
  */
-export async function payCustomAmountBRLd(api, getInjector, selectedAccount, recipientAddress, feeRecipientAddress, inputElementId = 'custom-amount-BRLd', onStatusUpdate) {
+export async function payCustomAmountBRLd(api, getInjector, selectedAccount, recipientAddress, feeRecipientAddress, inputElementId = 'custom-amount-BRLd', onStatusUpdate, usdtFeeAssetId = null) {
     try {
         // 1. Validaciones iniciales
         if (!api) {
@@ -270,15 +411,13 @@ export async function payCustomAmountBRLd(api, getInjector, selectedAccount, rec
         if (!input) {
             throw new Error(`Elemento input con ID '${inputElementId}' no encontrado.`);
         }
-        
+
         const rawAmount = input.value.trim();
-         console.log(`[payCustomAmountBRLd] Raw amount from input '${inputElementId}': '${rawAmount}' (type: ${typeof rawAmount})`);
         if (!rawAmount || isNaN(rawAmount)) {
             throw new Error("Ingresa un monto válido en BRLd.");
         }
 
         const amountInBRLd = parseFloat(rawAmount);
-        console.log(`[payCustomAmountBRLd] Parsed amountInBRLd: ${amountInBRLd} (type: ${typeof amountInBRLd})`);
         if (amountInBRLd <= 0) {
             throw new Error("El monto en BRLd debe ser mayor a 0.");
         }
@@ -298,21 +437,30 @@ export async function payCustomAmountBRLd(api, getInjector, selectedAccount, rec
 
         // 6. Ejecutar el pago
         const mensajeFinal = await sendBRLdBatchPayment(
-        api, 
-        injector, 
-        selectedAccount, 
-        recipientAddress, // <- 4to argumento
-        amountInBRLd,     // <- 5to argumento
-        feeRecipientAddress, // <- 6to argumento
-        {},
-        onStatusUpdate
-    );
-        
+            api,
+            injector,
+            selectedAccount,
+            recipientAddress, // <- 4to argumento
+            amountInBRLd,     // <- 5to argumento
+            feeRecipientAddress, // <- 6to argumento
+            {},
+            onStatusUpdate,
+            usdtFeeAssetId
+        );
+
         // 7. Devolver resultado
         return mensajeFinal;
 
     } catch (error) {
         console.error("🚨 Error en pago personalizado BRLd (módulo refactorizado):", error);
+
+        // Si es cancelación de wallet, actualizar estado antes de lanzar
+        if (error.message && error.message.includes("Cancelled")) {
+            if (onStatusUpdate) {
+                onStatusUpdate({ state: 'error', message: '❌ Transacción cancelada.' });
+            }
+        }
+
         throw error; // Re-lanzamos para que el caller maneje la UI
     }
 }
