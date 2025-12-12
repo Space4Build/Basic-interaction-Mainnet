@@ -587,6 +587,9 @@ function showShareOptions(message, transactionData) {
             Elige cómo quieres compartir el QR:
         </p>
         <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
+            <button id="share-native" style="padding: 10px 15px; background: #17a2b8; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; display: none;">
+                🔗 Compartir nativo
+            </button>
             <button id="share-whatsapp" style="padding: 10px 15px; background: #25D366; color: white; border: none; border-radius: 8px; cursor: pointer; font-size: 14px;">
                 📱 WhatsApp
             </button>
@@ -603,12 +606,40 @@ function showShareOptions(message, transactionData) {
     document.body.appendChild(modal);
     
     // Configurar eventos
-    document.getElementById('share-whatsapp').onclick = () => {
+    const nativeBtn = document.getElementById('share-native');
+    const whatsappBtn = document.getElementById('share-whatsapp');
+    const telegramBtn = document.getElementById('share-telegram');
+
+    // Mostrar botón nativo si el navegador soporta navigator.share (mejor oportunidad de adjuntar imagen+texto)
+    if (navigator.share) {
+        nativeBtn.style.display = 'inline-block';
+    }
+
+    nativeBtn.onclick = async () => {
+        try {
+            // Intentar compartir la imagen compuesta + texto
+            const blob = await createCompositeImageBlob(transactionData);
+            const file = new File([blob], `transaction-qr-${Date.now()}.png`, { type: 'image/png' });
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], text: message, title: 'Transacción verificada' });
+            } else if (navigator.share) {
+                // Intentar compartir al menos el texto+url
+                await navigator.share({ text: message, title: 'Transacción verificada', url: transactionData.subscanUrl || undefined });
+            }
+        } catch (err) {
+            console.warn('[QR Generator] Compartir nativo falló, se usará fallback:', err);
+            alert('No fue posible compartir de forma nativa en este dispositivo. Se abrirán las opciones web.');
+        } finally {
+            document.body.removeChild(modal);
+        }
+    };
+
+    whatsappBtn.onclick = () => {
         shareToWhatsApp(message, transactionData);
         document.body.removeChild(modal);
     };
     
-    document.getElementById('share-telegram').onclick = () => {
+    telegramBtn.onclick = () => {
         shareToTelegram(message, transactionData);
         document.body.removeChild(modal);
     };
